@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTC Chart Signal AI Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .glass-card {
+            background: rgba(22, 27, 34, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(48, 54, 61, 0.7);
+        }
+        .pulse-loader {
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-2xl glass-card rounded-2xl shadow-2xl p-6 sm:p-8 space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center space-y-1">
+            <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-wide flex items-center justify-center gap-2">
+                ⚡ OTC Chart AI Analyst
+            </h1>
+            <p class="text-xs sm:text-sm text-gray-400">
+                Upload M1 Chart Screenshot to get Next Candle Target Signal
+            </p>
+        </div>
+
+        <!-- Upload Container -->
+        <div class="space-y-4">
+            <label for="chartInput" id="dropArea" class="flex flex-col items-center justify-center w-full h-52 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-gray-800/50 transition-all relative overflow-hidden">
+                
+                <div id="uploadPlaceholder" class="flex flex-col items-center justify-center text-center px-4">
+                    <svg class="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p class="mb-1 text-sm text-gray-300 font-medium">Click to upload or drag & drop</p>
+                    <p class="text-xs text-gray-500">PNG, JPG, or WEBP chart screenshot</p>
+                </div>
+
+                <img id="imagePreview" class="hidden absolute inset-0 w-full h-full object-contain p-2 bg-black/50" alt="Chart Preview" />
+                <input id="chartInput" type="file" accept="image/*" class="hidden" />
+            </label>
+        </div>
+
+        <!-- Submit Button -->
+        <button id="signalBtn" onclick="analyzeChart()" disabled class="w-full py-3.5 px-6 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center space-x-2">
+            <span id="btnText">GET SIGNAL</span>
+            <div id="btnSpinner" class="pulse-loader hidden"></div>
+        </button>
+
+        <!-- Error Message Container -->
+        <div id="errorBox" class="hidden p-4 rounded-xl bg-red-900/40 border border-red-700/60 text-red-300 text-sm"></div>
+
+        <!-- Signal Result Display -->
+        <div id="resultCard" class="hidden space-y-4 pt-4 border-t border-gray-700/60">
+            
+            <!-- Direction & Pair Header -->
+            <div class="flex items-center justify-between p-4 rounded-xl bg-gray-800/60 border border-gray-700">
+                <div>
+                    <span class="text-xs text-gray-400 uppercase tracking-wider block">Target Pair</span>
+                    <span id="resPair" class="text-lg font-bold text-white">---</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-gray-400 uppercase tracking-wider block">Signal Direction</span>
+                    <span id="resDirection" class="text-2xl font-black tracking-widest px-3 py-1 rounded-lg inline-block">---</span>
+                </div>
+            </div>
+
+            <!-- Signal Key Metrics Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="p-3 rounded-lg bg-gray-800/40 border border-gray-700/50">
+                    <span class="text-xs text-gray-400 block">Strength</span>
+                    <span id="resStrength" class="font-semibold text-gray-200">---</span>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-800/40 border border-gray-700/50">
+                    <span class="text-xs text-gray-400 block">Trend</span>
+                    <span id="resTrend" class="font-semibold text-gray-200">---</span>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-800/40 border border-gray-700/50">
+                    <span class="text-xs text-gray-400 block">Support</span>
+                    <span id="resSupport" class="font-semibold text-gray-200">---</span>
+                </div>
+                <div class="p-3 rounded-lg bg-gray-800/40 border border-gray-700/50">
+                    <span class="text-xs text-gray-400 block">Resistance</span>
+                    <span id="resResistance" class="font-semibold text-gray-200">---</span>
+                </div>
+            </div>
+
+            <!-- Traps & Analysis Logic -->
+            <div class="space-y-3 p-4 rounded-xl bg-gray-800/40 border border-gray-700/50">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-gray-400">Trap Risk Level: <strong id="resTrapLevel" class="text-gray-200">---</strong></span>
+                    <span id="resTraps" class="text-amber-400 font-mono"></span>
+                </div>
+                <hr class="border-gray-700/60" />
+                <div>
+                    <span class="text-xs text-gray-400 block mb-1">Analysis Reasoning:</span>
+                    <p id="resLogic" class="text-xs sm:text-sm text-gray-300 leading-relaxed font-sans"></p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // Updated with your Cloudflare Tunnel URL
+        const BACKEND_URL = "https://dis-jam-customized-battle.trycloudflare.com/analyze-chart";
+        
+        const chartInput = document.getElementById("chartInput");
+        const imagePreview = document.getElementById("imagePreview");
+        const uploadPlaceholder = document.getElementById("uploadPlaceholder");
+        const signalBtn = document.getElementById("signalBtn");
+        const btnText = document.getElementById("btnText");
+        const btnSpinner = document.getElementById("btnSpinner");
+        const resultCard = document.getElementById("resultCard");
+        const errorBox = document.getElementById("errorBox");
+
+        chartInput.addEventListener("change", function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    imagePreview.src = evt.target.result;
+                    imagePreview.classList.remove("hidden");
+                    uploadPlaceholder.classList.add("hidden");
+                    signalBtn.disabled = false;
+                    hideError();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function analyzeChart() {
+            const file = chartInput.files[0];
+            if (!file) return;
+
+            signalBtn.disabled = true;
+            btnText.textContent = "ANALYZING...";
+            btnSpinner.classList.remove("hidden");
+            resultCard.classList.add("hidden");
+            hideError();
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Server error occurred");
+                }
+
+                const data = await response.json();
+                
+                if (data.valid_chart === false) {
+                    showError("Invalid or Untrusted Chart Image. Please upload a clear trading chart.");
+                } else {
+                    renderResult(data);
+                }
+
+            } catch (err) {
+                showError("Error: " + err.message);
+            } finally {
+                signalBtn.disabled = false;
+                btnText.textContent = "GET SIGNAL";
+                btnSpinner.classList.add("hidden");
+            }
+        }
+
+        function renderResult(data) {
+            document.getElementById("resPair").textContent = data.pair || "N/A";
+            
+            const dirElem = document.getElementById("resDirection");
+            dirElem.textContent = data.direction || "WAIT";
+            
+            if (data.direction === "UP") {
+                dirElem.className = "text-2xl font-black tracking-widest px-3 py-1 rounded-lg inline-block bg-green-500/20 text-green-400 border border-green-500/40";
+            } else if (data.direction === "DOWN") {
+                dirElem.className = "text-2xl font-black tracking-widest px-3 py-1 rounded-lg inline-block bg-red-500/20 text-red-400 border border-red-500/40";
+            } else {
+                dirElem.className = "text-2xl font-black tracking-widest px-3 py-1 rounded-lg inline-block bg-amber-500/20 text-amber-400 border border-amber-500/40";
+            }
+
+            document.getElementById("resStrength").textContent = data.strength || "N/A";
+            document.getElementById("resTrend").textContent = data.trend || "N/A";
+            document.getElementById("resSupport").textContent = data.support ? data.support : "N/A";
+            document.getElementById("resResistance").textContent = data.resistance ? data.resistance : "N/A";
+            document.getElementById("resTrapLevel").textContent = data.trap_level || "Low";
+            
+            const traps = Array.isArray(data.traps) ? data.traps.join(", ") : "None";
+            document.getElementById("resTraps").textContent = traps ? "Traps: " + traps : "";
+
+            document.getElementById("resLogic").textContent = data.logic || "No detailed logic returned.";
+
+            resultCard.classList.remove("hidden");
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.classList.remove("hidden");
+        }
+
+        function hideError() {
+            errorBox.classList.add("hidden");
+        }
+    </script>
+</body>
+</html>
